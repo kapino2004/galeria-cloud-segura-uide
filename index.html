@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PLATAFORMA DE STREAMING</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; margin: 0; background-color: #121212; color: white; }
+        header { background-color: #1f1f1f; padding: 15px; text-align: center; border-bottom: 2px solid #e50914; }
+        header h1 { margin: 0; cursor: pointer; font-size: 1.5rem; }
+
+        .grid-container { display: grid; grid-template-columns: 1fr; gap: 20px; padding: 20px; }
+        .video-card { background-color: #1f1f1f; border-radius: 8px; overflow: hidden; cursor: pointer; transition: transform 0.2s; }
+        .video-card:hover { transform: scale(1.03); }
+        .video-card img { width: 100%; height: 180px; object-fit: cover; display: block; }
+        .video-info { padding: 15px; }
+        .video-info h3 { margin: 0 0 8px 0; font-size: 1.1rem; }
+        .video-info p { margin: 0; color: #b3b3b3; font-size: 0.9rem; }
+
+        .player-container { display: flex; flex-direction: column; gap: 20px; padding: 20px; }
+        .video-section { flex: 1; }
+        video { width: 100%; border-radius: 8px; background-color: #000; max-height: 450px; }
+        .comments-section, .recommendations-aside { background-color: #1f1f1f; padding: 15px; border-radius: 8px; margin-top: 15px; }
+        #form-comentario { display: flex; gap: 10px; margin-bottom: 15px; }
+        #input-comentario { flex: 1; padding: 10px; border-radius: 4px; border: 1px solid #333; background-color: #2a2a2a; color: white; }
+        #form-comentario button { padding: 10px 15px; background-color: #e50914; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .comentario-item { border-bottom: 1px solid #333; padding: 10px 0; font-size: 0.95rem; }
+        .recomendacion-card { display: flex; gap: 10px; margin-bottom: 12px; cursor: pointer; }
+        .recomendacion-card img { width: 100px; height: 60px; object-fit: cover; border-radius: 4px; }
+        .recomendacion-card p { margin: 0; font-size: 0.85rem; font-weight: bold; }
+
+        .oculto { display: none !important; }
+
+        @media (min-width: 768px) {
+            .grid-container { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+            .player-container { flex-direction: row; }
+            .video-section { width: 70%; }
+            .recommendations-aside { width: 30%; margin-top: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1 onclick="mostrarCatalogo()">PLATAFORMA DE STREAMING</h1>
+    </header>
+
+    <main>
+        <section id="vista-catalogo">
+            <div id="galeria-videos" class="grid-container"></div>
+        </section>
+
+        <section id="vista-reproductor" class="player-container oculto">
+            <div class="video-section">
+                <video id="video-player" controls></video>
+                <h2 id="video-titulo"></h2>
+                <p id="video-desc" style="color: #b3b3b3;"></p>
+
+                <div class="comments-section">
+                    <h3>Comentarios</h3>
+                    <form id="form-comentario">
+                        <input type="text" id="input-comentario" placeholder="Escribe tu opinión..." required>
+                        <button type="submit">Enviar</button>
+                    </form>
+                    <div id="lista-comentarios"></div>
+                </div>
+            </div>
+
+            <aside class="recommendations-aside">
+                <h3>Recomendados</h3>
+                <div id="lista-recomendaciones"></div>
+            </aside>
+        </section>
+    </main>
+
+    <script>
+        const API_URL = "http://localhost:8000";
+
+        const vistaCatalogo = document.getElementById('vista-catalogo');
+        const vistaReproductor = document.getElementById('vista-reproductor');
+
+        function mostrarCatalogo() {
+            vistaReproductor.classList.add('oculto');
+            vistaCatalogo.classList.remove('oculto');
+            const player = document.getElementById('video-player');
+            player.pause();
+            player.src = "";
+            cargarGaleria();
+        }
+
+        async function cargarGaleria() {
+            try {
+                const res = await fetch(`${API_URL}/videos/`);
+                const videos = await res.json();
+                const contenedor = document.getElementById('galeria-videos');
+                contenedor.textContent = "";
+
+                videos.forEach(video => {
+                    const card = document.createElement('article');
+                    card.className = 'video-card';
+                    card.onclick = () => cargarReproductor(video.id);
+
+                    const img = document.createElement('img');
+                    img.src = video.url_miniatura;
+                    img.alt = video.titulo;
+
+                    const info = document.createElement('div');
+                    info.className = 'video-info';
+
+                    const h3 = document.createElement('h3');
+                    h3.textContent = video.titulo;
+
+                    const p = document.createElement('p');
+                    p.textContent = `Categoría: ${video.categoria}`;
+
+                    info.appendChild(h3);
+                    info.appendChild(p);
+                    card.appendChild(img);
+                    card.appendChild(info);
+                    contenedor.appendChild(card);
+                });
+            } catch (err) {
+                console.error("Error al cargar la galería:", err);
+            }
+        }
+
+        async function cargarReproductor(videoId) {
+            vistaCatalogo.classList.add('oculto');
+            vistaReproductor.classList.remove('oculto');
+
+            try {
+                const res = await fetch(`${API_URL}/videos/${videoId}`);
+                const video = await res.json();
+
+                document.getElementById('video-player').src = video.url_video;
+                document.getElementById('video-titulo').textContent = video.titulo;
+                document.getElementById('video-desc').textContent = video.descripcion;
+
+                cargarRecomendaciones(videoId);
+                cargarComentarios(videoId);
+                configurarFormulario(videoId);
+            } catch (err) {
+                console.error("Error al cargar el video:", err);
+            }
+        }
+
+        async function cargarRecomendaciones(videoId) {
+            try {
+                const res = await fetch(`${API_URL}/videos/${videoId}/recommendations`);
+                const recomendaciones = await res.json();
+                const contenedor = document.getElementById('lista-recomendaciones');
+                contenedor.textContent = "";
+
+                recomendaciones.forEach(rec => {
+                    const card = document.createElement('div');
+                    card.className = 'recomendacion-card';
+                    card.onclick = () => cargarReproductor(rec.id);
+
+                    const img = document.createElement('img');
+                    img.src = rec.url_miniatura;
+                    img.alt = rec.titulo;
+
+                    const p = document.createElement('p');
+                    p.textContent = rec.titulo;
+
+                    card.appendChild(img);
+                    card.appendChild(p);
+                    contenedor.appendChild(card);
+                });
+            } catch (err) {
+                console.error("Error al cargar recomendaciones:", err);
+            }
+        }
+
+        async function cargarComentarios(videoId) {
+            try {
+                const contenedor = document.getElementById('lista-comentarios');
+                contenedor.textContent = "";
+
+                const res = await fetch(`${API_URL}/videos/${videoId}/comments`);
+                const comentarios = await res.json();
+
+                comentarios.forEach(com => {
+                    const div = document.createElement('div');
+                    div.className = 'comentario-item';
+                    div.textContent = com.texto;
+                    contenedor.appendChild(div);
+                });
+            } catch (err) {
+                console.error("Error al cargar comentarios:", err);
+            }
+        }
+
+        function configurarFormulario(videoId) {
+            const form = document.getElementById('form-comentario');
+            const nuevoForm = form.cloneNode(true);
+            form.parentNode.replaceChild(nuevoForm, form);
+
+            nuevoForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const input = document.getElementById('input-comentario');
+                const texto = input.value.trim();
+                if (!texto) return;
+
+                try {
+                    const res = await fetch(`${API_URL}/videos/${videoId}/comments`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ texto: texto })
+                    });
+
+                    if (res.ok) {
+                        const contenedor = document.getElementById('lista-comentarios');
+                        const div = document.createElement('div');
+                        div.className = 'comentario-item';
+                        div.textContent = texto;
+                        contenedor.prepend(div);
+                        input.value = '';
+                    }
+                } catch (err) {
+                    console.error("Error al enviar comentario:", err);
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', cargarGaleria);
+    </script>
+</body>
+</html>
